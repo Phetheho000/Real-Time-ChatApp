@@ -8,10 +8,10 @@ const app = express();
 // Allow requests from React
 app.use(cors());
 
-// Create a HTTP server from Express
+// Create HTTP server
 const server = http.createServer(app);
 
-// Attach Socket.IO to the HTTP server
+// Configure Socket.IO
 const io = new Server(server, {
     cors: {
         origin: "http://localhost:5173",
@@ -24,23 +24,46 @@ app.get("/", (req, res) => {
     res.send("Chat server is running");
 });
 
-// Socket.IO connection
+// Handle Socket.IO connections
 io.on("connection", (socket) => {
-
     console.log("User connected:", socket.id);
 
-    // Receive chat message
+    // Receive and broadcast messages
     socket.on("chatMessage", (message) => {
+        if (
+            !message ||
+            typeof message.username !== "string" ||
+            typeof message.text !== "string"
+        ) {
+            return;
+        }
 
-        console.log("Message received:", message);
+        const username = message.username.trim().slice(0, 20);
+        const text = message.text.trim().slice(0, 2000);
 
-        // Send message to all connected users
-        io.emit("chatMessage", message);
+        // Reject empty messages
+        if (!username || !text) {
+            return;
+        }
+
+        // Create the message on the server
+        const chatMessage = {
+            username,
+            text,
+            time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            })
+        };
+
+        console.log("Message received:", chatMessage);
+
+        // Broadcast the message exactly once
+        io.emit("chatMessage", chatMessage);
     });
 
-    // User disconnects
+    // Handle disconnection
     socket.on("disconnect", () => {
-
         console.log("User disconnected:", socket.id);
     });
 });
