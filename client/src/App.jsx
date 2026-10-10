@@ -12,21 +12,53 @@ function App() {
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState([]);
     const [error, setError] = useState("");
+    const [onlineUsers, setOnlineUsers] = useState([]);
+    const [typingUsers, setTypingUsers] = useState([]);
 
-    useEffect(() => {
-        const receiveMessage = (data) => {
-            setMessages((previousMessages) => [
-                ...previousMessages,
-                data
-            ]);
-        };
+useEffect(() => {
+    // Listen for new chat messages
+    const receiveMessage = (data) => {
+        setMessages((previousMessages) => [
+            ...previousMessages,
+            data
+        ]);
+    };
 
-        socket.on("chatMessage", receiveMessage);
+    // Listen for online users
+    const receiveOnlineUsers = (users) => {
+        setOnlineUsers(users);
+    };
 
-        return () => {
-            socket.off("chatMessage", receiveMessage);
-        };
-    }, []);
+    // Listen when someone starts typing
+    const receiveTyping = (typingUsername) => {
+        setTypingUsers((previousUsers) =>
+            previousUsers.includes(typingUsername)
+                ? previousUsers
+                : [...previousUsers, typingUsername]
+        );
+    };
+
+    // Listen when someone stops typing
+    const receiveStopTyping = (typingUsername) => {
+        setTypingUsers((previousUsers) =>
+            previousUsers.filter((user) => user !== typingUsername)
+        );
+    };
+
+    // Register all listeners
+    socket.on("chatMessage", receiveMessage);
+    socket.on("onlineUsers", receiveOnlineUsers);
+    socket.on("typing", receiveTyping);
+    socket.on("stopTyping", receiveStopTyping);
+
+    // Remove listeners when the component unmounts
+    return () => {
+        socket.off("chatMessage", receiveMessage);
+        socket.off("onlineUsers", receiveOnlineUsers);
+        socket.off("typing", receiveTyping);
+        socket.off("stopTyping", receiveStopTyping);
+    };
+}, []);
 
     const login = (event) => {
         event.preventDefault();
@@ -45,6 +77,8 @@ function App() {
         if (!socket.connected) {
             socket.connect();
         }
+
+        socket.emit("userOnline", cleanUsername);
     };
 
 const sendMessage = (event) => {
@@ -129,6 +163,26 @@ const sendMessage = (event) => {
                     {socket.connected ? "Connected" : "Connecting..."}
                 </div>
 
+                <aside className="online-users">
+                    <h3>
+                        Online Users
+                        <span className="online-count">{onlineUsers.length}</span>
+                    </h3>
+
+                    {onlineUsers.length === 0 ? (
+                        <p className="no-users">No users online</p>
+                    ) : (
+                        <ul>
+                            {onlineUsers.map((user) => (
+                                <li key={user}>
+                                    <span className="user-status-dot"></span>
+                                    {user === username ? `${user} (You)` : user}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </aside>
+
                 <div className="messages">
                     {messages.length === 0 && (
                         <div className="empty-chat">
@@ -162,13 +216,39 @@ const sendMessage = (event) => {
                             </div>
                         );
                     })}
+
+                    {typingUsers.filter((user) => user !== username).length > 0 && (
+                        <div className="typing-indicator">
+                            <span className="typing-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+
+                            {typingUsers
+                                .filter((user) => user !== username)
+                                .join(", ")}
+                            {typingUsers.filter((user) => user !== username).length === 1
+                                ? " is typing..."
+                                : " are typing..."}
+                        </div>
+)}
                 </div>
 
                 <form className="message-form" onSubmit={sendMessage}>
                     <input
                         type="text"
                         value={message}
-                        onChange={(event) => setMessage(event.target.value)}
+                        onChange={(event) => {
+                            const value = event.target.value;
+                            setMessage(value);
+
+                            if (value.trim()) {
+                                socket.emit("typing");
+                            } else {
+                                socket.emit("stopTyping");
+                            }
+                        }}
                         placeholder="Type your message..."
                     />
 

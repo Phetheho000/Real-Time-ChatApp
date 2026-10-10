@@ -5,13 +5,10 @@ const { Server } = require("socket.io");
 
 const app = express();
 
-// Allow requests from React
 app.use(cors());
 
-// Create HTTP server
 const server = http.createServer(app);
 
-// Configure Socket.IO
 const io = new Server(server, {
     cors: {
         origin: "http://localhost:5173",
@@ -19,16 +16,43 @@ const io = new Server(server, {
     }
 });
 
-// Test route
+// Store connected users: socket ID -> username
+const onlineUsers = new Map();
+
 app.get("/", (req, res) => {
     res.send("Chat server is running");
 });
 
-// Handle Socket.IO connections
+// Send the current online-user list to everyone
+function updateOnlineUsers() {
+    const users = [...new Set(onlineUsers.values())];
+
+    io.emit("onlineUsers", users);
+}
+
 io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    // Receive and broadcast messages
+    // Register a username when a user logs in
+    socket.on("userOnline", (username) => {
+        if (typeof username !== "string") {
+            return;
+        }
+
+        username = username.trim().slice(0, 20);
+
+        if (!username) {
+            return;
+        }
+
+        onlineUsers.set(socket.id, username);
+
+        console.log(`${username} is online`);
+
+        updateOnlineUsers();
+    });
+
+    // Receive and broadcast chat messages
     socket.on("chatMessage", (message) => {
         if (
             !message ||
@@ -41,12 +65,10 @@ io.on("connection", (socket) => {
         const username = message.username.trim().slice(0, 20);
         const text = message.text.trim().slice(0, 2000);
 
-        // Reject empty messages
         if (!username || !text) {
             return;
         }
 
-        // Create the message on the server
         const chatMessage = {
             username,
             text,
@@ -56,19 +78,46 @@ io.on("connection", (socket) => {
             })
         };
 
-        console.log("Message received:", chatMessage);
-
-        // Broadcast the message exactly once
         io.emit("chatMessage", chatMessage);
     });
 
-    // Handle disconnection
+    //Notify other users when someone start typing 
+    socket.on("typing", () => {
+        const username = onlineUsers.get(socket.id);
+
+        if (username) {
+            socket.broadcast.emit("typing", username);
+        }
+    });
+
+    //Notify other users when someone stops typing
+    socket.on("stopTyping", () => {
+        const username = onlineUsers.get(socket.id);
+
+        if (username) {
+            socket.broadcast.emit("stopTyping", username);
+        }
+    });
+
+    // Remove the user when they disconnect
     socket.on("disconnect", () => {
+        const username = onlineUsers.get(socket.id);
+
+        onlineUsers.delete(socket.id);
+
+        if (username) {
+            console.log(`${username} went offline`);
+            updateOnlineUsers();
+        }
+
+        if (username) {
+            socket.broadcast.emit("stopTyping", username);
+        }
+
         console.log("User disconnected:", socket.id);
     });
 });
 
-// Start server
 const PORT = 5000;
 
 server.listen(PORT, () => {
