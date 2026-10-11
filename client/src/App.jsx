@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
@@ -14,6 +14,7 @@ function App() {
     const [error, setError] = useState("");
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [typingUsers, setTypingUsers] = useState([]);
+    const typingTimer = useRef(null);
 
 useEffect(() => {
     // Listen for new chat messages
@@ -90,11 +91,19 @@ const sendMessage = (event) => {
         return;
     }
 
+    // Cancel the typing timer
+    clearTimeout(typingTimer.current);
+
+    // Tell other users you have stopped typing
+    socket.emit("stopTyping");
+
+    // Send the chat message
     socket.emit("chatMessage", {
         username,
         text: cleanMessage
     });
 
+    // Clear the input
     setMessage("");
 };
 
@@ -243,8 +252,14 @@ const sendMessage = (event) => {
                             const value = event.target.value;
                             setMessage(value);
 
+                            clearTimeout(typingTimer.current);
+
                             if (value.trim()) {
                                 socket.emit("typing");
+
+                                typingTimer.current = setTimeout(() => {
+                                    socket.emit("stopTyping");
+                                }, 2000);
                             } else {
                                 socket.emit("stopTyping");
                             }
