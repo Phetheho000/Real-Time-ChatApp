@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const pool = require("./database");
 
 const app = express();
 
@@ -52,8 +53,8 @@ io.on("connection", (socket) => {
         updateOnlineUsers();
     });
 
-    // Receive and broadcast chat messages
-    socket.on("chatMessage", (message) => {
+ // Receive, save, and broadcast chat messages
+    socket.on("chatMessage", async (message) => {
         if (
             !message ||
             typeof message.username !== "string" ||
@@ -62,23 +63,51 @@ io.on("connection", (socket) => {
             return;
         }
 
-        const username = message.username.trim().slice(0, 20);
+        const username = (
+            onlineUsers.get(socket.id) || message.username
+        ).trim().slice(0, 20);
+
         const text = message.text.trim().slice(0, 2000);
 
         if (!username || !text) {
             return;
         }
 
-        const chatMessage = {
-            username,
-            text,
-            time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-            })
-        };
+        try {
+            // Save the message to PostgreSQL
+            const result = await pool.query(
+                `INSERT INTO messages (username, message_text)
+                 VALUES ($1, $2)
+                 RETURNING id, username, message_text, created_at`,
+                [username, text]
+            );
 
-        io.emit("chatMessage", chatMessage);
+            const row = result.rows[0];
+
+            // Prepare the saved message for the chat
+            const chatMessage = {
+                id: row.id,
+                username: row.username,
+                text: row.message_text,
+                time: new Date(row.created_at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                })
+            };
+
+            // Broadcast only after PostgreSQL saves it
+            io.emit("chatMessage", chatMessage);
+
+            console.log("Message saved to PostgreSQL:", text);
+
+        } catch (error) {
+            console.error("Failed to save message:", error.message);
+
+            socket.emit(
+                "messageError",
+                "Your message could not be saved. Please try again."
+            );
+        }
     });
 
     //Notify other users when someone start typing 
