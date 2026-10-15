@@ -31,7 +31,32 @@ function updateOnlineUsers() {
     io.emit("onlineUsers", users);
 }
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
+    try {
+    const result = await pool.query(`
+        SELECT id, username,
+               message_text AS text, created_at
+        FROM messages
+        ORDER BY created_at DESC, id DESC
+        LIMIT 100
+    `);
+
+    const history = result.rows.reverse().map((row) => ({
+        id: row.id,
+        username: row.username,
+        text: row.text,
+        time: new Date(row.created_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        })
+    }));
+
+    socket.emit("messageHistory", history);
+    console.log("Message history sent: ", history.length);
+
+} catch (error) {
+    console.error("Could not load message history:", error.message);
+}
     console.log("User connected:", socket.id);
 
     // Register a username when a user logs in

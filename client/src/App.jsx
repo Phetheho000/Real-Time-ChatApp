@@ -46,11 +46,16 @@ useEffect(() => {
         );
     };
 
+    const receiveMessageHistory = (history) => {
+        setMessages(history);
+    };
+
     // Register all listeners
     socket.on("chatMessage", receiveMessage);
     socket.on("onlineUsers", receiveOnlineUsers);
     socket.on("typing", receiveTyping);
     socket.on("stopTyping", receiveStopTyping);
+    socket.on("messageHistory", receiveMessageHistory);
 
     // Remove listeners when the component unmounts
     return () => {
@@ -58,6 +63,7 @@ useEffect(() => {
         socket.off("onlineUsers", receiveOnlineUsers);
         socket.off("typing", receiveTyping);
         socket.off("stopTyping", receiveStopTyping);
+        socket.off("messageHistory", receiveMessageHistory);
     };
 }, []);
 
