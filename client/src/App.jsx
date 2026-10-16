@@ -7,8 +7,12 @@ const socket = io("http://localhost:5000", {
 });
 
 function App() {
-    const [username, setUsername] = useState("");
-    const [loggedIn, setLoggedIn] = useState(false);
+    const [username, setUsername] = useState(
+        () => localStorage.getItem("chatUsername") || ""
+    );
+    const [loggedIn, setLoggedIn] = useState(
+        () => Boolean(localStorage.getItem("chatUsername"))
+    );
     const [message, setMessage] = useState("");
     const [messages, setMessages] = useState([]);
     const [error, setError] = useState("");
@@ -47,6 +51,7 @@ useEffect(() => {
     };
 
     const receiveMessageHistory = (history) => {
+        console.log("History received by React:", history);
         setMessages(history);
     };
 
@@ -67,6 +72,16 @@ useEffect(() => {
     };
 }, []);
 
+useEffect(() => {
+    if (loggedIn && username) {
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        socket.emit("userOnline", username);
+    }
+}, [loggedIn, username]);
+
     const login = (event) => {
         event.preventDefault();
 
@@ -78,6 +93,8 @@ useEffect(() => {
         }
 
         setUsername(cleanUsername);
+        localStorage.setItem("chatUsername", cleanUsername);
+
         setError("");
         setLoggedIn(true);
 
@@ -164,6 +181,8 @@ const sendMessage = (event) => {
                         className="logout-button"
                         onClick={() => {
                             socket.disconnect();
+                            localStorage.removeItem("chatUsername");
+                            setUsername("");
                             setLoggedIn(false);
                             setMessages([]);
                             setMessage("");
