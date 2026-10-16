@@ -3,10 +3,14 @@ const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
 const pool = require("./database");
+const authRoutes = require ("./auth");
 
 const app = express();
 
 app.use(cors());
+app.use(express.json());
+
+app.use("/api/auth", authRoutes);
 
 const server = http.createServer(app);
 

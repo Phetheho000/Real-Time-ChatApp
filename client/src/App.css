@@ -409,3 +409,22 @@ input {
         opacity: 1;
     }
 }
+
+.auth-switch {
+    background: none;
+    border: none;
+    color: #6c63ff;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    padding: 4px;
+}
+
+.auth-switch:hover {
+    text-decoration: underline;
+}
+
+.primary-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
